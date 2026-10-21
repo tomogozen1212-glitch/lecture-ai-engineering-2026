@@ -3,6 +3,7 @@
 使い方:
     uv run python -m app.ask "LoRAとは何ですか？"
     uv run python -m app.ask            # 質問を省略すると、講座に固有の質問をする
+    uv run python -m app.ask --chat     # 会話履歴を保持する対話モード
 
 ツールも会話履歴も持たない「素の」呼び出し。
 講座に固有のことを聞くと、「分からない」と答えるか、一般論でもっともらしく答える
@@ -35,15 +36,39 @@ def ask(question: str) -> str:
     return response.text
 
 
+def chat() -> None:
+    client = genai.Client(api_key=get_api_key())
+    conversation = client.chats.create(model=MODEL)
+
+    print("対話モードです。終了するには exit と入力してください。\n")
+    while True:
+        question = input("[質問] ")
+        if question.strip() == "exit":
+            break
+
+        response = conversation.send_message(question)
+        usage = response.usage_metadata
+        if usage is not None:
+            print(
+                f"[トークン数] 入力: {usage.prompt_token_count}, "
+                f"出力: {usage.candidates_token_count}"
+            )
+        print(f"[回答]\n{response.text}\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="素のLLMに質問する")
     parser.add_argument("question", nargs="?", default=DEFAULT_QUESTION)
+    parser.add_argument("--chat", action="store_true", help="会話履歴を保持する対話モード")
     args = parser.parse_args()
 
     print(f"[model] {MODEL}")
-    print(f"[質問] {args.question}\n")
     try:
-        print(ask(args.question))
+        if args.chat:
+            chat()
+        else:
+            print(f"[質問] {args.question}\n")
+            print(ask(args.question))
     except errors.APIError as e:
         print(api_error_message(e.code, e.message))
         raise SystemExit(1)
